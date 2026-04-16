@@ -10,6 +10,8 @@ LBLU = color_256(14)
 CYA = color_256(36)
 DPIN = color_256(125)
 WHI = color_256(7)
+YEL = color_256(11)
+BLA = color_256(16)
 
 arch_lines: List[str] = [
 BLU + "                                        " + RST,   
@@ -80,6 +82,29 @@ DPIN + "                   .                   " + RST,
 DPIN + "                                       " + RST, 
 ]
 
+tux_lines: List[str] = [
+WHI + "                                        " + RST,   
+WHI + "                                        " + RST,
+WHI + "                     .:                 " + RST,
+WHI + "                                        " + RST,
+WHI + f"               .+#.-#+*                 " + RST,
+WHI + f"               .+{YEL}=*+*-{WHI}*                 " + RST,
+WHI + f"               {YEL}.+****+= {WHI}.               " + RST,
+WHI + f"               .#{YEL}+++#{WHI}%%+                " + RST,
+WHI + "               %@%%%@@@%-               " + RST,
+WHI + "              =%@%%%@%*+*:.             " + RST,
+WHI + "             *@@@@@@@@@@@%..            " + RST,
+WHI + "            =@@@@%@@@@@@@%=             " + RST,
+WHI + "           .*%@%@#@@@@@@@@* .           " + RST,
+WHI + f"        {YEL}+*#*={WHI}%%@@%@@@@%@{YEL}%#*   :+        " + RST,
+WHI + f"     {YEL}+***####+{WHI} *@@@@@@@{YEL}%***-:+*#*       " + RST,
+WHI + f"     {YEL}+*#######*{WHI} +@@%@@@{YEL}%++*#######*     " + RST,
+WHI + f"     {YEL}**########*#{WHI}%%%#*: {YEL}:*#######**     " + RST,
+YEL + f"     :==++*****+-       :+***+=         " + RST,
+YEL + f"            :--:         :-:.           " + RST,
+WHI + "                                        " + RST,
+]
+
 def print_side_by_side(left: List[str], right: List[str], width: int = 40, gap: int = 4) -> None:
     spacer = ' ' * gap
     for l, r in zip(left, right):
@@ -87,9 +112,10 @@ def print_side_by_side(left: List[str], right: List[str], width: int = 40, gap: 
         print(l.ljust(width + l.count('\033')) + spacer + r.ljust(width + r.count('\033')))
 
 distros = {
+    "linux": tux_lines,
     "arch": arch_lines,
     "cachyos": cachy_lines,
-    "debian": debian_lines   
+    "debian": debian_lines
 }
 
 # ---- show them ----
