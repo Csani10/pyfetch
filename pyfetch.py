@@ -37,7 +37,7 @@ def secs2hours(secs):
 
 os_release = parse_os_release()
 
-logo = distros[os_release.get("ID", "linux")]
+logo = distros.get(os_release.get("ID", "linux"), distros["linux"])
 
 username = os.environ.get("USER", "unknown")
 hostname = "unknown"
