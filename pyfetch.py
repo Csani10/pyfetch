@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 from distros import distros, print_side_by_side, RST, LBLU, GRE, WHI
 import os
 import subprocess
