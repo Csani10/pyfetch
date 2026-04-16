@@ -29,6 +29,12 @@ def parse_os_release(path="/etc/os-release"):
             data[key] = value
     return data
 
+def secs2hours(secs):
+    mm, ss = divmod(secs, 60)
+    hh, mm = divmod(mm, 60)
+    return f"{int(hh)}:{int(mm):02}:{int(ss):02}"
+
+
 os_release = parse_os_release()
 
 logo = distros[os_release.get("ID", "linux")]
@@ -93,6 +99,14 @@ for network in network_info.keys():
     if network.startswith("wlan") or network.startswith("enp"):
         network_texts.append(f"{LBLU}Local ({network}){WHI}: {network_info[network][0].address}")
 
+batt = psutil.sensors_battery()
+batt_text = ""
+if batt:
+    status = "Discharging"
+    if batt.power_plugged:
+        status = "Charging" if batt.percent < 100 else "Fully charged"
+    batt_text = f"{LBLU}Battery ({status}){WHI}: {secs2hours(batt.secsleft)} {batt.percent}%"
+
 info = [
     "",    
     "",
@@ -107,7 +121,8 @@ info = [
     ram,
     swap,
     disk,
-    *network_texts
+    *network_texts,
+    batt_text
 ]
 
 for i in range(25 - len(info)):
