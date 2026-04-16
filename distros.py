@@ -4,11 +4,12 @@ def color_256(n: int) -> str:
     return f"\033[38;5;{n}m"
 
 RST = color_256(0)
+GRE = color_256(40)
 BLU = color_256(12)
 LBLU = color_256(14)
 CYA = color_256(36)
 DPIN = color_256(125)
-
+WHI = color_256(7)
 
 arch_lines: List[str] = [
 BLU + "                                        " + RST,   
