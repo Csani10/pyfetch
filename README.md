@@ -5,6 +5,7 @@ A fetch tool made in python
 
 ## Configuration
 Config should be here: ~/.config/pyfetch/config.toml
+
 Example configuration avaiable [here](example.config.toml)
 
 ## Bugs
