@@ -100,17 +100,24 @@ def module_packages(module):#pkgman="pacman", format="$lightblue$Packages (pacma
         return add_colors(format).replace("%pkgcount%", "unknown")
 
     if pkgman == "pacman":
-        pacman_pkg_count = subprocess.check_output("pacman -Q | wc -l", shell=True, text=True).strip()
+        #pacman_pkg_count = subprocess.check_output("pacman -Q | wc -l", shell=True, text=True).strip()
+        pacman_pkg_count = str(len(list(Path("/var/lib/pacman/local/").iterdir())) - 1)
         return add_colors(format).replace("%pkgcount%", pacman_pkg_count)
     elif pkgman == "dpkg":
         output = subprocess.check_output(["dpkg", "-l"], text=True)
         dpkg_count = count = sum(1 for line in output.splitlines() if line.startswith("ii"))
         return add_colors(format).replace("%pkgcount%", dpkg_count)
     elif pkgman == "flatpak_system":
-        flatpak_system = subprocess.check_output("flatpak list --system | wc -l", shell=True, text=True).strip()
+        #flatpak_system = subprocess.check_output("flatpak list --system | wc -l", shell=True, text=True).strip()
+        app = len(list(Path("/var/lib/flatpak/app/").iterdir())) if Path("/var/lib/flatpak/app/").exists() else 0
+        runtime = len(list(Path("/var/lib/flatpak/runtime/").iterdir())) if Path("/var/lib/flatpak/runtime/").exists() else 0
+        flatpak_system = str(app + runtime)
         return add_colors(format).replace("%pkgcount%", flatpak_system)
     elif pkgman == "flatpak_user":
-        flatpak_user = subprocess.check_output("flatpak list --user | wc -l", shell=True, text=True).strip()
+        #flatpak_user = subprocess.check_output("flatpak list --user | wc -l", shell=True, text=True).strip()        
+        app = len(list((Path.home() / Path(".local/share/flatpak/app/")).iterdir())) if (Path.home() / Path(".local/share/flatpak/app/")).exists() else 0
+        runtime = len(list((Path.home() / Path(".local/share/flatpak/runtime/")).iterdir())) if (Path.home() / Path(".local/share/flatpak/runtime/")).exists() else 0
+        flatpak_user = str(app + runtime)
         return add_colors(format).replace("%pkgcount%", flatpak_user)
     else:
         return add_colors(format).replace("%pkgcount%", "unknown_pkgman")
