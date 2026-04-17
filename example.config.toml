@@ -1,0 +1,20 @@
+[pyfetch]
+logo = "default" # set it to default logo
+
+[info]
+modules = [
+  { type = "empty", count = 3 },
+  { type = "username_hostname", format = "$lightblue$%username%$white$@$lightblue$%hostname%" },
+  { type = "divider", format = "$white$-", count = "23" },
+  { type = "os", format = "$lightblue$OS$white$: %os% %arch%" },
+  { type = "kernel", format = "$lightblue$Kernel$white$ %kernel%" },
+  { type = "packages", pkgman = "pacman", format = "$lightblue$Packages (pacman)$white$: %pkgcount%" },
+  { type = "packages", pkgman = "flatpak_system", format = "$lightblue$Packages (flatpak system)$white$: %pkgcount%" },
+  { type = "cpu", format = "$lightblue$CPU$white$: %cpu%" },
+  { type = "gpus", format = "$lightblue$GPU$white$: %gpu%" },
+  { type = "ram", format = "$lightblue$RAM$white$: %ram_used% GiB / %ram_total% GiB" },
+  { type = "swap", format = "$lightblue$Swap$white$: %swap_used% GiB / %swap_total% GiB" },
+  { type = "disk", root = "/", format = "$lightblue$Disk$white$: %disk_used% GiB / %disk_total% GiB"},
+  { type = "network", interface = "wlan0", format = "$lightblue$Network (%interface%)$white$: %ipv4%" },
+  { type = "battery", charging = "Charging", discharging = "Discharging", fullycharged = "Fully Charged", unlimited = "Unlimited", format = "$lightblue$Battery (%status%)$white$: %left% %percent%%" }
+]
