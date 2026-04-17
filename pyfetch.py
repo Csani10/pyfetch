@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
-from distros import distros, print_side_by_side, RST, LBLU, GRE, WHI
+from distros import distros, print_side_by_side, colors, RST
 import os
 import subprocess
 from pathlib import Path
 import re
 import psutil
+import socket
 import shutil
+import tomllib
+
+ansi_escape = re.compile(r'\x1B\[[0-?]*[ -/]*[@-~]')
 
 def vga_gpus():
     out = subprocess.check_output(["lspci", "-mm"], text=True).splitlines()
@@ -29,103 +33,248 @@ def parse_os_release(path="/etc/os-release"):
             data[key] = value
     return data
 
+os_release = parse_os_release()
+
 def secs2hours(secs):
     mm, ss = divmod(secs, 60)
     hh, mm = divmod(mm, 60)
-    return f"{int(hh)}:{int(mm):02}:{int(ss):02}"
+    return f"{int(hh)}h {int(mm):02}m {int(ss):02}s"
 
+def add_colors(module_text):
+    result = module_text
+    for color in colors.keys():
+        result = result.replace(f"${color}$", colors[color])
+    return result
 
-os_release = parse_os_release()
+def module_len(module_text):
+    return len(ansi_escape.sub("", module_text))
 
-logo = distros.get(os_release.get("ID", "linux"), distros["linux"])
+def module_empty(module):
+    count = module.get("count", "15")
+    return ["" for i in range(int(count))]
 
-username = os.environ.get("USER", "unknown")
-hostname = "unknown"
-if Path("/etc/hostname").exists():
-    hostname = Path("/etc/hostname").read_text().strip()
-username_hostname = f"{LBLU}{username}{WHI}@{LBLU}{hostname}"
-user_host_len = len(username) + len(hostname) + 1
+def module_username_hostname(module): #format="$lightblue$%username%$white$@$lightblue$%hostname%"):
+    username = os.environ.get("USER", "unknown")
+    hostname = "unknown"
+    if Path("/etc/hostname").exists():
+        hostname = Path("/etc/hostname").read_text().strip()
 
-arch = subprocess.check_output(["uname", "-m"], text=True).strip() or "unknown_arch"
-distro = f"{LBLU}OS{WHI}: {os_release.get("PRETTY_NAME", "Unknown")} {arch}"
-kernel_ver = subprocess.check_output(["uname", "-sr"], text=True).strip() or "unknown_kernel"
-kernel = f"{LBLU}Kernel{WHI}: {kernel_ver}"
+    format = module.get("format", "$lightblue$%username%$white$@$lightblue$%hostname%")
 
-package_texts = []
-if shutil.which("pacman"):
-    pacman_pkg_count = subprocess.check_output("pacman -Q | wc -l", shell=True, text=True).strip()
-    package_texts.append(f"{LBLU}Packages (pacman){WHI}: {pacman_pkg_count}")
-if shutil.which("dpkg"):
-    output = subprocess.check_output(["dpkg", "-l"], text=True)
-    dpkg_count = count = sum(1 for line in output.splitlines() if line.startswith("ii"))
-    package_texts.append(f"{LBLU}Packages (dpkg){WHI}: {dpkg_count}")
-if shutil.which("flatpak"):
-    flatpak_system = subprocess.check_output("flatpak list --system | wc -l", shell=True, text=True).strip()
-    flatpak_user = subprocess.check_output("flatpak list --user | wc -l", shell=True, text=True).strip()
-    package_texts.append(f"{LBLU}Packages (flatpak system){WHI}: {flatpak_system}")
-    package_texts.append(f"{LBLU}Packages (flatpak user){WHI}: {flatpak_user}")
+    module_text = format.replace("%username%", username).replace("%hostname%", hostname)
+    module_text = add_colors(module_text)
+    return module_text
 
-cpu_info = Path("/proc/cpuinfo").read_text().splitlines()
-cpu = "Unknown cpu"
-for line in cpu_info:
-    if line.startswith("model name"):
-        cpu = line.replace(":", "").removeprefix("model name").strip()
+def module_divider(module):#format="-", count="15"):
+    format = module.get("format", "-")
+    count = module.get("count", "15")
 
-cpu_text = f"{LBLU}Cpu{WHI}: {cpu}"
+    try:
+        count_int = int(count)
+        return add_colors(format) * count_int
+    except ValueError:
+        return "Incorrect count for divider"        
 
-gpus = vga_gpus()
-gpu_texts = []
-for gpu in gpus:
-    gpu_texts.append(f"{LBLU}Gpu{WHI}: {gpu}")
+def module_os(module): #format="$lightblue$OS$white$: %os% %arch%"):
+    format = module.get("format", "$lightblue$OS$white$: %os% %arch%")
 
-ram_info = psutil.virtual_memory()
-ram_used = ram_info.used / (1024 ** 3)
-ram_total = ram_info.total / (1024 ** 3)
-ram = f"{LBLU}Ram{WHI}: {ram_used:.1f} GiB / {ram_total:.1f} GiB"
+    if not os_release:
+        return add_colors(format).replace("%os%", "Unknown")
 
-swap_info = psutil.swap_memory()
-swap_used = swap_info.used / (1024 ** 3)
-swap_total = swap_info.total / (1024 ** 3)
-swap = f"{LBLU}Swap{WHI}: {swap_used:.1f} GiB / {swap_total:.1f} GiB"
+    arch = subprocess.check_output(["uname", "-m"], text="True").strip() or "unknown_arch"
 
-disk_info = psutil.disk_usage("/")
-disk_used = disk_info.used / (1024 ** 3)
-disk_total = disk_info.total / (1024 ** 3)
-disk = f"{LBLU}Disk{WHI}: {disk_used:.1f} GiB / {disk_total:.1f} GiB"
+    return add_colors(format).replace("%os%", os_release.get("PRETTY_NAME", "Unknown")).replace("%arch%", arch)
 
-network_info = psutil.net_if_addrs()
-network_texts = []
-for network in network_info.keys():
-    if network.startswith("wlan") or network.startswith("enp"):
-        network_texts.append(f"{LBLU}Local ({network}){WHI}: {network_info[network][0].address}")
+def module_kernel(module):#format="$lightblue$Kernel$white$: %kernel%"):
+    format = module.get("format", "$lightblue$Kernel$white$: %kernel%")
 
-batt = psutil.sensors_battery()
-batt_text = ""
-if batt:
-    status = "Discharging"
-    if batt.power_plugged:
-        status = "Charging" if batt.percent < 100 else "Fully charged"
-    batt_text = f"{LBLU}Battery ({status}){WHI}: {secs2hours(batt.secsleft)} {batt.percent}%"
+    kernel = subprocess.check_output(["uname", "-sr"], text=True).strip() or "unknown_kernel"
 
-info = [
-    "",    
-    "",
-    "",
-    username_hostname,
-    LBLU + "-" * user_host_len,
-    distro,
-    kernel,
-    *package_texts,
-    cpu_text,
-    *gpu_texts,
-    ram,
-    swap,
-    disk,
-    *network_texts,
-    batt_text
-]
+    return add_colors(format).replace("%kernel%", kernel)
 
-for i in range(25 - len(info)):
-    info.append("")
+def module_packages(module):#pkgman="pacman", format="$lightblue$Packages (pacman)$white$: %pkgcount%"):
+    pkgman = module.get("pkgman", "pacman")
+    format = module.get("format", "$lightblue$Packages (pacman)$white$: %pkgcount%")
 
-print_side_by_side(logo, info, gap=5)
+    if not shutil.which(pkgman.split("_")[0]):
+        return add_colors(format).replace("%pkgcount%", "unknown")
+
+    if pkgman == "pacman":
+        pacman_pkg_count = subprocess.check_output("pacman -Q | wc -l", shell=True, text=True).strip()
+        return add_colors(format).replace("%pkgcount%", pacman_pkg_count)
+    elif pkgman == "dpkg":
+        output = subprocess.check_output(["dpkg", "-l"], text=True)
+        dpkg_count = count = sum(1 for line in output.splitlines() if line.startswith("ii"))
+        return add_colors(format).replace("%pkgcount%", dpkg_count)
+    elif pkgman == "flatpak_system":
+        flatpak_system = subprocess.check_output("flatpak list --system | wc -l", shell=True, text=True).strip()
+        return add_colors(format).replace("%pkgcount%", flatpak_system)
+    elif pkgman == "flatpak_user":
+        flatpak_user = subprocess.check_output("flatpak list --user | wc -l", shell=True, text=True).strip()
+        return add_colors(format).replace("%pkgcount%", flatpak_user)
+    else:
+        return add_colors(format).replace("%pkgcount%", "unknown_pkgman")
+
+def module_cpu(module):#format="$lightblue$CPU$white$: %cpu%"):
+    format = module.get("format", "$lightblue$CPU$white$: %cpu%")
+
+    cpu_info = Path("/proc/cpuinfo").read_text().splitlines()
+    cpu = "Unknown cpu"
+    for line in cpu_info:
+        if line.startswith("model name"):
+            cpu = line.replace(":", "").removeprefix("model name").strip()
+
+    return add_colors(format).replace("%cpu%", cpu)
+
+def module_gpus(module):#format="$lightblue$GPU$white$: %gpu%"):
+    format = module.get("format", "$lightblue$GPU$white$: %gpu%")
+
+    gpus = vga_gpus()
+    module_texts = []
+    for gpu in gpus:
+        module_texts.append(add_colors(format).replace("%gpu%", gpu))
+
+    return module_texts
+
+def module_ram(module):#format="$lightblue$RAM$white$: %ram_used% GiB / %ram_total% GiB"):
+    format = module.get("format", "$lightblue$RAM$white$: %ram_used% GiB / %ram_total% GiB")
+
+    ram_info = psutil.virtual_memory()
+    ram_used = ram_info.used / (1024 ** 3)
+    ram_total = ram_info.total / (1024 ** 3)
+
+    return add_colors(format).replace("%ram_used%", f"{ram_used:.1f}").replace("%ram_total%", f"{ram_total:.1f}")
+
+def module_swap(module):#format="$lightblue$Swap$white$: %swap_used% GiB / %swap_total% GiB"):
+    format = module.get("format", "$lightblue$Swap$white$: %swap_used% GiB / %swap_total% GiB")
+
+    swap_info = psutil.swap_memory()
+    swap_used = swap_info.used / (1024 ** 3)
+    swap_total = swap_info.total / (1024 ** 3)
+
+    return add_colors(format).replace("%swap_used%", f"{swap_used:.1f}").replace("%swap_total%", f"{swap_total:.1f}")
+
+def module_disk(module):#root="/", format="$lightblue$Disk$white$: %disk_used% GiB / %disk_total% GiB"):
+    root = module.get("root", "/")
+    format = module.get("format", "$lightblue$Disk$white$: %disk_used% GiB / %disk_total% GiB")
+
+    disk_info = psutil.disk_usage(root)
+    disk_used = disk_info.used / (1024 ** 3)
+    disk_total = disk_info.total / (1024 ** 3)
+
+    return add_colors(format).replace("%disk_used%", f"{disk_used:.1f}").replace("%disk_total%", f"{disk_total:.1f}")
+
+def module_network(module):#interface="wlan0", format="$lightblue$Network (%interface%)$white$: %ipv4%"):
+    interface = module.get("interface", "wlan0")
+    format = module.get("format", "$lightblue$Network (%interface%)$white$: %ipv4%")
+
+    net_info = psutil.net_if_addrs()
+    interface_info = net_info.get(interface, None)
+    if not interface_info:
+        return "No interface named: " + interface
+
+    ipv4 = ""
+    ipv6 = ""
+    for addr in interface_info:
+        if hasattr(addr, "family") and addr.family == socket.AF_INET:
+            ipv4 = addr.address
+        elif hasattr(addr, "family") and addr.family == socket.AF_INET6:
+            ipv6 = addr.address
+
+    return add_colors(format).replace("%ipv4%", ipv4).replace("%ipv6%", ipv6).replace("%interface%", interface)
+
+def module_battery(module):#charging="Charging", discharging="Discharging", fullycharged="Fully Charged", unlimited="Unlimited", format="$lightblue$Battery (%status%)$white$: %left% %percent%%"):
+    charging = module.get("charging", "Charging")
+    discharging = module.get("discharging", "Discharging")
+    fullycharged = module.get("fullycharged", "Fully Charged")
+    unlimited = module.get("unlimited", "Unlimited")
+    format = module.get("format", "$lightblue$Battery (%status%)$white$: %left% %percent%%")
+
+    battery = psutil.sensors_battery()
+    if not battery:
+        return "No battery"
+
+    percent = battery.percent
+    status = discharging
+    if battery.power_plugged:
+        status = charging if percent < 100 else fullycharged
+
+    return add_colors(format).replace("%status%", status).replace("%left%", secs2hours(battery.secsleft) if battery.secsleft != psutil.POWER_TIME_UNLIMITED else unlimited).replace("%percent%", f"{percent:.1f}")
+
+def main():
+    config = {
+        "pyfetch": 
+        {
+            "logo": "default"
+        },
+        "info":
+        {
+            "modules":
+            [
+                { "type": "empty", "count": 3 },
+                { "type": "username_hostname", "format": "$lightblue$%username%$white$@$lightblue$%hostname%" },
+                { "type": "divider", "format": "-", "count": "15" },
+                { "type": "os", "format": "$lightblue$OS$white$: %os% %arch%" },
+                { "type": "kernel", "format": "$lightblue$Kernel$white$ %kernel%" },
+                { "type": "packages", "pkgman": "pacman", "format": "$lightblue$Packages (pacman)$white$: %pkgcount%" },
+                { "type": "cpu", "format": "$lightblue$CPU$white$: %cpu%" },
+                { "type": "gpus", "format": "$lightblue$GPU$white$: %gpu%" },
+                { "type": "ram", "format": "$lightblue$RAM$white$: %ram_used% GiB / %ram_total% GiB" },
+                { "type": "swap", "format": "$lightblue$Swap$white$: %swap_used% GiB / %swap_total% GiB" },
+                { "type": "disk", "root": "/", "format": "$lightblue$Disk$white$: %disk_used% GiB / %disk_total% GiB"},
+                { "type": "network", "interface": "wlan0", "format": "$lightblue$Network (%interface%)$white$: %ipv4%" },
+                { "type": "battery", "charging": "Charging", "discharging": "Discharging", "fullycharged": "Fully Charged", "unlimited": "Unlimited", "format": "$lightblue$Battery (%status%)$white$: %left% %percent%%" }
+            ]
+        }
+    }
+
+    config_path = Path.home() / Path(".config/pyfetch/config.toml")
+    if config_path.exists:
+        config = tomllib.loads(config_path.read_text())
+
+    info_modules = []
+
+    if config["pyfetch"]["logo"] == "default":
+        logo = distros.get(os_release.get("ID", "linux"), "linux")
+    else:
+        logo = distros.get(config["pyfetch"]["logo"], "linux")
+
+    for module in config["info"]["modules"]:
+        match module["type"]:
+            case "empty":
+                for empty in module_empty(module):
+                    info_modules.append(empty)
+            case "username_hostname":
+                info_modules.append(module_username_hostname(module))
+            case "divider":
+                info_modules.append(module_divider(module))
+            case "os":
+                info_modules.append(module_os(module))
+            case "kernel":
+                info_modules.append(module_kernel(module))
+            case "packages":
+                info_modules.append(module_packages(module))
+            case "cpu":
+                info_modules.append(module_cpu(module))
+            case "gpus":
+                for gpu in module_gpus(module):
+                    info_modules.append(gpu)
+            case "ram":
+                info_modules.append(module_ram(module))
+            case "swap":
+                info_modules.append(module_swap(module))
+            case "disk":
+                info_modules.append(module_disk(module))
+            case "network":
+                info_modules.append(module_network(module))
+            case "battery":
+                info_modules.append(module_battery(module))
+
+    if len(info_modules) < 25:
+        for empty in module_empty({"type": "empty", "count": str(25 - len(info_modules))}):
+            info_modules.append(empty)
+
+    print_side_by_side(logo, info_modules, gap=5)
+
+if __name__ == "__main__":
+    main()
